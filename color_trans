@@ -1,0 +1,211 @@
+import cv2
+import numpy as np
+import sys
+import io
+
+sys.stdout = io.TextIOWrapper(sys.stdout.detach(), encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.detach(), encoding='utf-8')
+
+# 색깔별 변수 선언
+BLUE, GREEN, RED, BLACK, WHITE = (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 0, 0), (255, 255, 255)
+# 전경표시일 때, 배경표시일 때 의 영역선택 색깔값과 val값을 미리 설정
+DRAW_BG = {'color': BLACK, 'val': 0}
+DRAW_FG = {'color': WHITE, 'val': 1}
+
+# 사용할 값들에 대한 초기값 설정
+
+# grabCut 에 적용되는 범위값 (x,y,w,h)
+rect = (0, 0, 1, 1)
+# 마우스 왼쪽버튼으로 배경과 전경부분을 마킹할 때, 마우스 왼쪽버튼을 눌럿는지 확인
+drawing = False
+# 제일처음 전경이 되는 범위를 지정해주는데 마우스버튼을 ONOFF 구분해주는 값
+rectangle = False
+# 처음 전경 선택이 되어있느냐 마느냐를 결정하는값, 이값이 True 여야 마우스 왼쪽
+# 버튼에 대한 작업이 이루어질 수 있음. 이 부분은 전경선택을 하면 True 가 됨
+rect_over = False
+# grabCut에 적용하는 모드에 대한값.
+# 처음 전경을 선택한 범위에 대한 grabcut 은 사각형 범위에 대한 값
+# 그다음부터 이루어지는 마킹에 대한 grabcut은 마스크 범위에 대한 값
+rect_or_mask = 100
+# 전경에 대한 마킹인지 배경에 대한 마킹인지 색깔과 속성값에 대한 변화를 줌
+value = DRAW_FG
+# 마킹되는 원의 반지
+thickness = 3
+
+
+# 마우스 액션에 대한 이벤트
+def onMouse(event, x, y, flags, param):
+    global ix, iy, img, img2, drawing, value, mask, rectangle
+    global rect, rect_or_mask, rect_over
+
+    # 마우스 오른쪽 버튼을 눌렀을 때,
+    if event == cv2.EVENT_RBUTTONDOWN:
+        # rectangle 값이 True가 되면서 사각형 그리기가 활성화됨
+        rectangle = True
+        # 위치값이 ix와 iy에 적용
+        ix, iy = x, y
+
+    # 마우스 이동시
+    elif event == cv2.EVENT_MOUSEMOVE:
+        # 마우스 이동시 마우스 오른쪽 버튼이 눌러져 있을때,
+        # 즉 마우스 오른쪽 버튼으로 드래그 했을때
+        if rectangle:
+            # 새로 마우스버튼을 떼고 누를때마다 새이미지
+            img = img2.copy()
+            # 현재 드래그된 범위에 대한 사각형을 그려줌
+            cv2.rectangle(img, (ix, iy), (x, y), RED, 2)
+            # 드래그된 범위에 대한 값이 grabcut 함수에 사용될 rect 범위
+            rect = (min(ix, x), min(iy, y), abs(ix - x), abs(iy - y))
+            # grabcut함수에 사용되는 모드선택에 대한값
+            # 현재 사각형 범위이기때문에 0 값을 부여
+            rect_or_mask = 0
+    # 마우스 오른쪽버튼에서 손을 뗐을때
+    elif event == cv2.EVENT_RBUTTONUP:
+        # 그리기 비활성화
+        rectangle = False
+        # 이제 마킹할 범위를 선택할 수 있게 되었음.
+        # 이 값이 True 가 되어야 사용자가 원하는 배경,전경 부븐을 체크가능
+        rect_over = True
+
+        # 선택된 영역에 대한 사각형 틀그리기
+        cv2.rectangle(img, (ix, iy), (x, y), RED, 2)
+        # grabcut 에 해당되는 rect 범위
+        rect = (min(ix, x), min(iy, y), abs(ix - x), abs(iy - y))
+        rect_or_mask = 0
+        print("n: apply ")
+
+    # 마우스 왼쪽버튼을 눌렀을 때
+    if event == cv2.EVENT_LBUTTONDOWN:
+        # rect_over 값이 False 라는 것은 전경범위가 선택이 안된것이기때문에
+        # 전경선택을 해달라는 메세지가 출력됨
+        if not rect_over:
+            print("ForeGround Select")
+        # 전경범위선택이 완료되었을 때
+        else:
+            # 그리기 활성화
+            drawing = True
+            # 0 또는 1이 선택된 값에 대한 색깔과 속성값을 가지고 그려짐
+            cv2.circle(img, (x, y), thickness, value['color'], -1)
+            # 영역에 대한 마스크 배열을 따로 지정함
+            cv2.circle(mask, (x, y), thickness, value['val'], -1)
+
+    # 마우스 이동시
+    elif event == cv2.EVENT_MOUSEMOVE:
+        # 그리기 활성화 됐을때, 즉 마우스 왼쪽버튼을 누른채로 드래그했을때
+        if drawing:
+            # 움직이는 경로에 전경,배경 마스킹
+            cv2.circle(img, (x, y), thickness, value['color'], -1)
+            # 이동하는 값들의 마스크값을 씌움
+            cv2.circle(mask, (x, y), thickness, value['val'], -1)
+
+    # 마우스 버튼에서 손을 뗐을 때
+    elif event == cv2.EVENT_LBUTTONUP:
+        # 그리기 활성화를 비활성화 시킴
+        if drawing:
+            drawing = False
+            # 끝나는 부분까지 위의 작업을 반복함
+            cv2.circle(img, (x, y), thickness, value['color'], -1)
+            cv2.circle(mask, (x, y), thickness, value['val'], -1)
+
+    return
+
+
+def grabcut():
+    global ix, iy, img, img2, drawing, value, mask, rectangle
+    global rect, rect_or_mask, rect_over
+
+    # 이미지파일 생성
+    imageFile = "onepiece.jpg"
+    img = cv2.imread(imageFile)
+    img2 = img.copy()
+
+    # 마스크값을 사용할 이미지의 width 와 height 에 동일하게 생성
+    mask = np.zeros(img.shape[:2], dtype=np.uint8)
+    # output의 초기값 설정 img의 원본과 동일한 크기의 배열
+    output = np.zeros(img.shape, np.uint8)
+
+    # 윈도우창 생성
+    cv2.namedWindow('input')
+    cv2.namedWindow('output')
+    # input 윈도에서 일어나는 마우스액션에 대한 작업
+    cv2.setMouseCallback('input',onMouse,param=(img,img2))
+    #cv2.moveWindow('input',img.shape[1]+10, 90)
+
+    print("오른쪽 마우스 버튼을 누르고 영역을 지정한 후 n 을 누르시오.")
+
+    while True:
+        cv2.imshow('output',output)
+        cv2.imshow('input',img)
+
+        k = cv2.waitKey(1)
+        if k == 27:
+            break
+
+        # 숫자 0을 눌렀을 때
+        if k == ord('0'):
+            print('왼쪽 마우스로 제거할 부분을 표시한 후 n을 누르세요')
+            # 색칠되는 값이 배경에 대한 값
+            # 마스크에서 해당부분의 값이 0이 됨
+            value = DRAW_BG
+
+        # 숫자 1을 눌렀을 때
+        elif k == ord('1'):
+            print('왼쪽 마우스로 복원할 부분을 표시한 후 n을 누르세요')
+            # 색칠되는 값이 전경에 대한 값
+            # 마스크에서 해당부분의 값이 1이 됨
+            value = DRAW_FG
+
+        # r 버튼을 눌렀을 때
+        elif k == ord('r'):
+            # 모든값을 초기값으로 재 세팅
+            print("리셋합니다")
+            rect = (0,0,1,1)
+            drawing = False
+            rectangle = False
+            rect_or_mask = 100
+            rect_over = False
+            value = DRAW_FG
+            img = img2.copy()
+            mask = np.zeros(img.shape[:2], dtype=np.uint8)
+            output = np.zeros(img.shape, np.uint8)
+            cv2.imwrite('drag_output.jpg', output, )
+            print('0 : 제거배경선택   1: 복원전경선택   n:적용하기   r:리셋하기')
+
+        # n 버튼 클릭시
+        elif k == ord('n'):
+            # 알고리즘에 사용되는 배열
+            bgdModel = np.zeros((1,65),np.float64)
+            fgdModel = np.zeros((1,65),np.float64)
+
+            # rect_or_mask 값이 0인 경우는 최초의 전경에 대한 사각형 범위 설정시
+            if rect_or_mask == 0:
+                # 사각형 범위에 대한 grabCut 이므로 마지막 모드값이 RECT 값이되어야함
+                cv2.grabCut(img2,mask,rect, bgdModel, fgdModel, 1, cv2.GC_INIT_WITH_RECT)
+                # 그 이후에는 rect_or_mask 값을 1로 만들어줌
+                rect_or_mask = 1
+            # 최초 전경범위 선택 이후 적용을하면 그이후에는 다 마스크범위에 대한 grabcut작업
+            elif rect_or_mask == 1:
+                cv2.grabCut(img2,mask,rect,bgdModel,fgdModel,1,cv2.GC_INIT_WITH_MASK)
+
+            print('0 : 제거배경선택   1: 복원전경선택   n:적용하기   r:리셋하기')
+        elif k == ord('f'):
+            cv2.imwrite('drag_output.jpg', output, )
+            cv2.destroyAllWindows()
+            break
+        # 위의 grabCut 작업이 완료가 되면 전경부분에 대한 마스크를 적용하여
+        # 비트연산을 해주면 해당하는 부분만 남게됨
+        mask2 = np.where((mask==1) + (mask==3), 255, 0).astype('uint8')
+        output = cv2.bitwise_and(img, img2, mask=mask2)
+        cv2.imwrite('drag_output.jpg', output, )
+    cv2.destroyAllWindows()
+
+
+grabcut()
+file_name = "drag_output.jpg"
+src = cv2.imread(file_name, 1)
+tmp = cv2.cvtColor(src, cv2.COLOR_BGR2GRAY)
+_,alpha = cv2.threshold(tmp,0,255,cv2.THRESH_BINARY)
+b, g, r = cv2.split(src)
+rgba = [b,g,r, alpha]
+dst = cv2.merge(rgba,4)
+cv2.imwrite("trans.png", dst)
