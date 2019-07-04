@@ -1,0 +1,26 @@
+import numpy as np
+import cv2
+from matplotlib import pyplot as plt
+
+img = cv2.imread('stripe.jpg')
+mask = np.zeros(img.shape[:2], np.uint8)
+
+bgdModel = np.zeros((1, 65), np.float64)
+fgdModel = np.zeros((1, 65), np.float64)
+
+# Step 1
+rect = (20, 120, 1500, 1500)
+cv2.grabCut(img, mask, rect, bgdModel, fgdModel, 1, cv2.GC_INIT_WITH_RECT)
+
+# Step 2
+newmask = cv2.imread('front2.jpg', 0)
+mask[newmask == 0] = 0
+mask[newmask == 255] = 1
+cv2.grabCut(img, mask, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
+
+mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+img = img * mask2[:, :, np.newaxis]
+plt.imshow(img), plt.colorbar(), plt.show()
+
+#cv::grabCut 함수의 다섯 번째 인자는 사용자가 반복 횟수를 지정하는 것.
+#알고리즘이 관리하는 두 내부 모델은 함수의 인자로 넘겨지고 추가 반복으로 수행한 분할 결과를 개선하기 원하면 마지막에 실행했던 모델 함수를 다시 호출.
