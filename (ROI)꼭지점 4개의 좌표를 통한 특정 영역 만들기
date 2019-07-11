@@ -1,0 +1,134 @@
+import cv2
+import argparse
+import numpy as np
+from matplotlib import pyplot as plt
+
+point_list = [] # 좌표 저장할 리스트
+count = 0 # 현재 좌표를 저장한 갯수
+cropping = False
+num = 0 # file 저장시 지정할 넘버
+point = 0 # 4개 씩 나눈다고 가정할시 첫번째 인자
+point2 = 4 # 4개 씩 나눈다고 가정할시 다음 번 좌표집합의 첫번째 인자
+
+def mouse_callback(event, x, y, flags, param):
+    global point_list, count, img
+
+
+    # 마우스 왼쪽 버튼 누를 때마다 좌표를 리스트에 저장
+    if event == cv2.EVENT_LBUTTONDOWN:
+        print("(%d, %d)" % (x, y))
+        point_list.append((x, y))
+        # point_list = [(x,y)] 매번 새로 생성하는 코드
+        cropping = True
+        print(point_list)
+        count = count+1
+
+        # print(count)
+        # print(len(point_list))
+        cv2.circle(image, (x, y), 3, (0, 0, 255), -1)
+
+
+
+# cv2.namedWindow('original')
+# cv2.setMouseCallback('original', mouse_callback)
+
+# 그랩 컷 알고리즘
+# img = cv2.imread('Pudcoco-backless.jpg')
+# mask = np.zeros(img.shape[:2], np.uint8)
+#
+# bgdModel = np.zeros((1, 65), np.float64)
+# fgdModel = np.zeros((1, 65), np.float64)
+#
+# # Step 1
+# rect = (20, 100, 1000, 1000)
+# cv2.grabCut(img, mask, rect, bgdModel, fgdModel, 1, cv2.GC_INIT_WITH_RECT)
+#
+# # Step 2
+# newmask = cv2.imread('front2.jpg', 0)
+# mask[newmask == 0] = 0
+# mask[newmask == 255] = 1
+# cv2.grabCut(img, mask, None, bgdModel, fgdModel, 1, cv2.GC_INIT_WITH_MASK)
+#
+# mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+# img = img * mask2[:, :, np.newaxis]
+#
+# cv2.imwrite('sample.jpg', img)
+
+# clone = img.copy()
+
+# 원본 이미지
+# image = cv2.imread('Pudcoco-backless.jpg',cv2.IMREAD_REDUCED_COLOR_2)
+image = cv2.imread('stripe_out.png')
+
+# 원본 이미지를 clone 하여 복사해 둡니다.
+clone = image.copy()
+
+
+# 새 윈도우 창을 만들고 그 윈도우 창에 click_and_crop 함수를 세팅해 줍니다. = mouse_callback
+cv2.namedWindow("image")
+cv2.setMouseCallback("image", mouse_callback)
+
+while True:
+    # 이미지를 출력하고 key 입력을 기다립니다.
+    cv2.imshow("image", image)
+    key = cv2.waitKey(1) & 0xFF
+
+    # 만약 r이 입력되면, crop 할 영열을 리셋합니다.
+    if key == ord("r"):
+        image = clone.copy()
+        point_list.clear()
+        count = 0
+        point = 0
+        point2 = 4
+    # 만약 c가 입력되고 ROI 박스가 정확하게 입력되었다면
+    # 박스의 좌표를 출력하고 crop한 영역을 출력합니다.
+    elif key == ord("c"):
+        if len(point_list) >= 4:
+            while True:
+            # roi = clone[point_list[0],point_list[1], point_list[2:point_list[1][0]
+            # if count >= point2:
+            #     point = count
+            #     point2 == point2 + 4
+            #     key2 = cv2.waitKey(1) & 0xFF
+                if count >= point2:
+                    roi = clone[min(point_list[point][1],point_list[point+1][1],point_list[point+2][1],point_list[point+3][1]):
+                                max(point_list[point][1],point_list[point+1][1],point_list[point + 2][1],point_list[point+3][1]),
+                          min(point_list[point][0],point_list[point+1][0],point_list[point+2][0],point_list[point+3][0]):
+                          max(point_list[point][0],point_list[point+1][0],point_list[point + 2][0],point_list[point+3][0])]
+                    # if point_list[point][0] < point_list[point+2][0]:
+                    #     roi = clone[point_list[point][1]:point_list[point + 2][1], point_list[point][0]:point_list[point + 2][0]]
+                    # else:
+                    #     roi = clone[point_list[point+2][1]:point_list[point][1],
+                    #           point_list[point+2][0]:point_list[point][0]]
+                    print(point)
+                    print(point_list)
+                    print(num)
+                    print(point2)
+                    point = point + 4
+                    cv2.imshow("ROI", roi)
+                    cv2.waitKey(0)
+
+                    cv2.imwrite("file%d.png " % num, roi)
+                    num = num+1
+                    # if (key2 == ord('s')):
+                    #     cv2.imwrite('file..jpg',roi)
+                    #     print(num)
+                    if point2+4 > count: # 4개 좌표 기준으로 나눈다고 했을시, 포인트2+4가 카운트보다 큼(지금 들어온 인자 갯수가 4의 배수가 아님)
+                        point = 0
+                        point2 = 4
+                        num = 0
+                        cv2.destroyWindow("ROI")
+                        break # 여기서 종료
+                    else: # 아닌 경우( 카운트가 4의 배수면서 포인트 2+4보단 크거나 같음)
+                        point2 = point2 + 4
+
+                else:
+                    break
+            point = 0
+            point2 = 4
+            # 만약 q가 입력되면 작업을 끝냅니다.
+    elif key == ord("q"):
+        break
+
+# 모든 window를 종료합니다.
+cv2.destroyAllWindows()
