@@ -1,0 +1,108 @@
+
+#만약 바깥 윤곽선이 잡힌다면 밑에서 다른 버전으로 변경
+
+import cv2
+from PIL import ImageFilter
+
+import tkinter as tk
+
+# cv2.IMREAD_COLOR
+# image = cv2.imread("uv1.png", cv2.IMREAD_REDUCED_COLOR_2)
+image = cv2.imread("uv1.png", cv2.IMREAD_UNCHANGED)
+cv2.imshow("result", image)
+cv2.waitKey(0)
+print(image.shape)
+blurred = cv2.GaussianBlur(image, (5, 5), 0)      #필터링, 노이즈 제거
+
+gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
+cv2.imshow("result2", gray)
+cv2.waitKey(0)
+
+edge = cv2.Canny(gray, 50, 150)
+cv2.imshow("result3", edge )
+cv2.waitKey(0)
+
+
+ret, binary = cv2.threshold(edge, 127, 255, cv2.THRESH_BINARY_INV)
+edge = binary
+f = open("output1.txt", 'w')
+
+
+# 1
+edge = cv2.bitwise_not(edge)
+cv2.imshow("result3", edge)
+contours, hierachy = cv2.findContours(edge.copy(), cv2.RETR_EXTERNAL , cv2.CHAIN_APPROX_SIMPLE)
+
+edges = image.copy()
+
+# 외각 윤곽선 잡힐때
+# for i in range(len(contours)-1):
+#     cv2.drawContours(edges, [contours[i+1]], 0, (0, 0, 255), 1)
+#     cv2.putText(edges, str(i+1), tuple(contours[i+1][0][0]), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 1)
+#     print(i+1, hierachy[0][i+1])
+#     # print(contours[i+1])
+#     f.writelines(str(contours[i+1])+'\n')
+#     cv2.imshow("src", edges)
+#     cv2.waitKey(0)
+
+#### 원본 파일에서 중심 픽셀의 색을 가져와 그것을 컨투어로 색칠하는 방법
+image2 = cv2.imread('one_3.png',cv2.IMREAD_UNCHANGED)
+height, width, channel = image2.shape
+
+color = (image2[int(height/2),int(width/2)])
+
+# 안잡힐때
+for i in range(len(contours)):
+   cv2.drawContours(edges, [contours[i]], 0, (0, 0, 255), -1)
+   # cv2.drawContours(edges, [contours[i]], 0, (int(color[0]),int(color[1]),int(color[2])), -1)
+   cv2.putText(edges, str(i), tuple(contours[i][0][0]), cv2.FONT_HERSHEY_COMPLEX, 0.8, (0, 255, 255), 1)
+   # print(i, hierachy[0][i])
+   # print(contours[i+1])
+   f.writelines(str(contours[i]) + '\n')
+   cv2.imshow("src", edges)
+   cv2.waitKey(0)
+
+
+
+# 모든 컨투어 중에서 고를때
+
+leftmost = 1000000
+rightmost = 0
+topmost = 1000000
+bottommost = 0
+for i in range(len(contours)):
+   cnt = contours[i]
+   #
+   # nowleftmost = cnt[cnt[:, :, 0].argmin()]
+   # nowrightmost = cnt[cnt[:, :, 0].argmax()]
+   # nowtopmost = cnt[cnt[:, :, 1].argmin()]
+   # nowbottommost = cnt[cnt[:, :, 1].argmax()]
+
+   nowleftmost = tuple(cnt[cnt[:, :, 0].argmin()][0])
+   nowrightmost = tuple(cnt[cnt[:, :, 0].argmax()][0])
+   nowtopmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
+   nowbottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
+   # print(nowleftmost)
+   # print(nowtopmost)
+   # print(nowrightmost)
+   # print(nowbottommost)
+   # print(leftmost)
+   # print(rightmost)
+   # print(topmost)
+   # print(bottommost)
+
+   leftmost = min(leftmost,nowleftmost[0])
+   rightmost = max(rightmost,nowrightmost[0])
+   topmost = min(topmost,nowtopmost[1])
+   bottommost = max(bottommost,nowbottommost[1])
+   # print(leftmost)
+   # print(rightmost)
+   # print(topmost)
+   # print(bottommost)
+
+# 좌우상하 최외각 점을 기준으로 roi 생성
+img1 = image[topmost:bottommost+2,leftmost:rightmost+2]
+cv2.imshow('roi3', img1)
+cv2.imwrite('roi3.png', img1)
+cv2.waitKey(0)
+
