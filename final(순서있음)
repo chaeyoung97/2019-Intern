@@ -1,0 +1,791 @@
+import sys
+from PyQt5.QtWidgets import *
+from tkinter import*
+import tkinter.filedialog
+from PyQt5.QtCore import QCoreApplication
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QLineEdit, QFileDialog
+from PyQt5.QtGui import QIcon
+origin=''
+copy=''
+outputfile='preoutput.png'
+class MyWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setupUI()
+
+    def setupUI(self):
+        self.setGeometry(800, 200, 300, 300)
+        self.setWindowTitle("texture make program v0.1")
+
+        self.pushButton2 = QPushButton("도면 File Open")
+        self.pushButton2.clicked.connect(self.pushButtonClicked2)
+        self.label2 = QLabel()
+
+        self.pushButton = QPushButton("원본 File Open")
+        self.pushButton.clicked.connect(self.pushButtonClicked)
+        self.label = QLabel()
+
+        self.pushButton3 = QPushButton("다른 이름으로 저장")
+        self.pushButton3.clicked.connect(self.optionClicked)
+        self.label3 = QLabel()
+        self.okbutton = QPushButton("확인")
+
+        self.okbutton.clicked.connect(app.quit)
+
+
+
+
+
+        layout = QVBoxLayout()
+        layout.addWidget(self.pushButton)
+        layout.addWidget(self.label)
+        layout.addWidget(self.pushButton2)
+        layout.addWidget(self.label2)
+        layout.addWidget(self.pushButton3)
+        layout.addWidget(self.label3)
+        layout.addWidget(self.okbutton)
+
+        self.setLayout(layout)
+
+    def pushButtonClicked(self):
+        global origin
+        fname = QFileDialog.getOpenFileName(self)
+        self.label.setText(fname[0])
+
+        origin = fname[0]
+    def pushButtonClicked2(self):
+        global copy
+        fname2 = QFileDialog.getOpenFileName(self)
+        self.label2.setText(fname2[0])
+        copy = fname2[0]
+
+    def optionClicked(self):
+        global outputfile
+
+
+        fname3 = QFileDialog.getSaveFileName(self)
+        self.label3.setText(fname3[0]+'.png')
+        outputfile = fname3[0]+'.png'
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MyWindow()
+    window.show()
+    app.exec_()
+
+
+
+    import cv2
+    import numpy as np
+    import sys
+    import io
+    from PIL import ImageFilter
+
+    import tkinter as tk
+
+    from matplotlib import pyplot as plt
+
+    # 색깔별 변수 선언
+    BLUE, GREEN, RED, BLACK, WHITE = (255, 0, 0), (0, 255, 0), (0, 0, 255), (0, 0, 0), (255, 255, 255)
+    # 전경표시일 때, 배경표시일 때 의 영역선택 색깔값과 val값을 미리 설정
+    DRAW_BG = {'color': BLACK, 'val': 0}
+    DRAW_FG = {'color': WHITE, 'val': 1}
+
+    # 사용할 값들에 대한 초기값 설정
+
+    # grabCut 에 적용되는 범위값 (x,y,w,h)
+    rect = (0, 0, 1, 1)
+    # 마우스 왼쪽버튼으로 배경과 전경부분을 마킹할 때, 마우스 왼쪽버튼을 눌럿는지 확인
+    drawing = False
+    # 제일처음 전경이 되는 범위를 지정해주는데 마우스버튼을 ONOFF 구분해주는 값
+    rectangle = False
+    # 처음 전경 선택이 되어있느냐 마느냐를 결정하는값, 이값이 True 여야 마우스 왼쪽
+    # 버튼에 대한 작업이 이루어질 수 있음. 이 부분은 전경선택을 하면 True 가 됨
+    rect_over = False
+    # grabCut에 적용하는 모드에 대한값.
+    # 처음 전경을 선택한 범위에 대한 grabcut 은 사각형 범위에 대한 값
+    # 그다음부터 이루어지는 마킹에 대한 grabcut은 마스크 범위에 대한 값
+    rect_or_mask = 100
+    # 전경에 대한 마킹인지 배경에 대한 마킹인지 색깔과 속성값에 대한 변화를 줌
+    value = DRAW_FG
+    # 마킹되는 원의 반지
+    thickness = 3
+
+
+    # 마우스 액션에 대한 이벤트
+    def onMouse(event, x, y, flags, param):
+        global ix, iy, img, img2, drawing, value, mask, rectangle
+        global rect, rect_or_mask, rect_over
+
+        # 마우스 오른쪽 버튼을 눌렀을 때,
+        if event == cv2.EVENT_RBUTTONDOWN:
+            # rectangle 값이 True가 되면서 사각형 그리기가 활성화됨
+            rectangle = True
+            # 위치값이 ix와 iy에 적용
+            ix, iy = x, y
+
+        # 마우스 이동시
+        elif event == cv2.EVENT_MOUSEMOVE:
+            # 마우스 이동시 마우스 오른쪽 버튼이 눌러져 있을때,
+            # 즉 마우스 오른쪽 버튼으로 드래그 했을때
+            if rectangle:
+                # 새로 마우스버튼을 떼고 누를때마다 새이미지
+                img = img2.copy()
+                # 현재 드래그된 범위에 대한 사각형을 그려줌
+                cv2.rectangle(img, (ix, iy), (x, y), RED, 2)
+                # 드래그된 범위에 대한 값이 grabcut 함수에 사용될 rect 범위
+                rect = (min(ix, x), min(iy, y), abs(ix - x), abs(iy - y))
+                # grabcut함수에 사용되는 모드선택에 대한값
+                # 현재 사각형 범위이기때문에 0 값을 부여
+                rect_or_mask = 0
+        # 마우스 오른쪽버튼에서 손을 뗐을때
+        elif event == cv2.EVENT_RBUTTONUP:
+            # 그리기 비활성화
+            rectangle = False
+            # 이제 마킹할 범위를 선택할 수 있게 되었음.
+            # 이 값이 True 가 되어야 사용자가 원하는 배경,전경 부븐을 체크가능
+            rect_over = True
+
+            # 선택된 영역에 대한 사각형 틀그리기
+            cv2.rectangle(img, (ix, iy), (x, y), RED, 2)
+            # grabcut 에 해당되는 rect 범위
+            rect = (min(ix, x), min(iy, y), abs(ix - x), abs(iy - y))
+            rect_or_mask = 0
+            bgdModel = np.zeros((1, 65), np.float64)
+            fgdModel = np.zeros((1, 65), np.float64)
+            cv2.grabCut(img2, mask, rect, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_RECT)
+            cv2.grabCut(img2, mask, rect, bgdModel, fgdModel, 3, cv2.GC_INIT_WITH_MASK)
+            cv2.grabCut(img2, mask, rect, bgdModel, fgdModel, 2, cv2.GC_INIT_WITH_MASK)
+            cv2.grabCut(img2, mask, rect, bgdModel, fgdModel, 3, cv2.GC_INIT_WITH_MASK)
+            rect_or_mask = 1
+            mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+            output = cv2.bitwise_and(img, img2, mask=mask2)
+
+        # 마우스 왼쪽버튼을 눌렀을 때
+        if event == cv2.EVENT_LBUTTONDOWN:
+            # rect_over 값이 False 라는 것은 전경범위가 선택이 안된것이기때문에
+            # 전경선택을 해달라는 메세지가 출력됨
+            if not rect_over:
+                print("ForeGround Select")
+            # 전경범위선택이 완료되었을 때
+            else:
+                # 그리기 활성화
+                drawing = True
+                # 0 또는 1이 선택된 값에 대한 색깔과 속성값을 가지고 그려짐
+                cv2.circle(img, (x, y), thickness, value['color'], -1)
+                # 영역에 대한 마스크 배열을 따로 지정함
+                cv2.circle(mask, (x, y), thickness, value['val'], -1)
+
+        # 마우스 이동시
+        elif event == cv2.EVENT_MOUSEMOVE:
+            # 그리기 활성화 됐을때, 즉 마우스 왼쪽버튼을 누른채로 드래그했을때
+            if drawing:
+                # 움직이는 경로에 전경,배경 마스킹
+                cv2.circle(img, (x, y), thickness, value['color'], -1)
+                # 이동하는 값들의 마스크값을 씌움
+                cv2.circle(mask, (x, y), thickness, value['val'], -1)
+
+        # 마우스 버튼에서 손을 뗐을 때
+        elif event == cv2.EVENT_LBUTTONUP:
+            # 그리기 활성화를 비활성화 시킴
+            if drawing:
+                drawing = False
+                # 끝나는 부분까지 위의 작업을 반복함
+                cv2.circle(img, (x, y), thickness, value['color'], -1)
+                cv2.circle(mask, (x, y), thickness, value['val'], -1)
+
+        return
+
+
+    def grabcut(title):
+        global ix, iy, img, img2, drawing, value, mask, rectangle
+        global rect, rect_or_mask, rect_over
+
+        # 이미지파일 생성
+        imageFile = title
+        img = cv2.imread(imageFile)
+        # blur = cv2.bilateralFilter(img, 1, 30, 150)
+        # gray = cv2.cvtColor(blur, cv2.COLOR_BGR2HLS_FULL)
+        # gray[:,:,0] = cv2.equalizeHist(gray[:,:,0])
+        # img = cv2.cvtColor(gray,cv2.COLOR_HLS2BGR_FULL)
+        # img = blur
+        img2 = img.copy()
+
+        # 마스크값을 사용할 이미지의 width 와 height 에 동일하게 생성
+        mask = np.zeros(img.shape[:2], dtype=np.uint8)
+        # output의 초기값 설정 img의 원본과 동일한 크기의 배열
+        output = np.zeros(img.shape, np.uint8)
+
+        # 윈도우창 생성
+        cv2.namedWindow('input')
+        cv2.namedWindow('output')
+        # input 윈도에서 일어나는 마우스액션에 대한 작업
+        cv2.setMouseCallback('input', onMouse, param=(img, img2))
+        # cv2.moveWindow('input',img.shape[1]+10, 90)
+
+        print("오른쪽 마우스 버튼을 누르고 영역을 지정한 후 n 을 누르시오.")
+
+        while True:
+            cv2.imshow('output', output)
+            cv2.imshow('input', img)
+
+            k = cv2.waitKey(1)
+            if k == 27:
+                break
+
+            # 숫자 0을 눌렀을 때
+            if k == ord('0'):
+                print('왼쪽 마우스로 제거할 부분을 표시한 후 n을 누르세요')
+                # 색칠되는 값이 배경에 대한 값
+                # 마스크에서 해당부분의 값이 0이 됨
+                value = DRAW_BG
+
+            # 숫자 1을 눌렀을 때
+            elif k == ord('1'):
+                print('왼쪽 마우스로 복원할 부분을 표시한 후 n을 누르세요')
+                # 색칠되는 값이 전경에 대한 값
+                # 마스크에서 해당부분의 값이 1이 됨
+                value = DRAW_FG
+
+            # r 버튼을 눌렀을 때
+            elif k == ord('r'):
+                # 모든값을 초기값으로 재 세팅
+                print("리셋합니다")
+                rect = (0, 0, 1, 1)
+                drawing = False
+                rectangle = False
+                rect_or_mask = 100
+                rect_over = False
+                value = DRAW_FG
+                img = img2.copy()
+                mask = np.zeros(img.shape[:2], dtype=np.uint8)
+                output = np.zeros(img.shape, np.uint8)
+                cv2.imwrite('drag_output.jpg', output, )
+                print('0 : 제거배경선택   1: 복원전경선택   n:적용하기   r:리셋하기')
+
+            # n 버튼 클릭시
+            elif k == ord('n'):
+                # 알고리즘에 사용되는 배열
+                bgdModel = np.zeros((1, 65), np.float64)
+                fgdModel = np.zeros((1, 65), np.float64)
+
+                # rect_or_mask 값이 0인 경우는 최초의 전경에 대한 사각형 범위 설정시
+                if rect_or_mask == 0:
+                    # 사각형 범위에 대한 grabCut 이므로 마지막 모드값이 RECT 값이되어야함
+                    cv2.grabCut(img2, mask, rect, bgdModel, fgdModel, 3, cv2.GC_INIT_WITH_RECT)
+                    cv2.grabCut(img2, mask, rect, bgdModel, fgdModel, 3, cv2.GC_INIT_WITH_MASK)
+
+                    # 그 이후에는 rect_or_mask 값을 1로 만들어줌
+                    rect_or_mask = 1
+                # 최초 전경범위 선택 이후 적용을하면 그이후에는 다 마스크범위에 대한 grabcut작업
+                elif rect_or_mask == 1:
+
+                    cv2.grabCut(img2, mask, rect, bgdModel, fgdModel, 2, cv2.GC_INIT_WITH_MASK)
+
+                print('0 : 제거배경선택   1: 복원전경선택   n:적용하기   r:리셋하기')
+            elif k == ord('f'):
+                cv2.imwrite('drag_output.jpg', output, )
+                cv2.destroyAllWindows()
+                break
+            # 위의 grabCut 작업이 완료가 되면 전경부분에 대한 마스크를 적용하여
+            # 비트연산을 해주면 해당하는 부분만 남게됨
+            mask2 = np.where((mask == 1) + (mask == 3), 255, 0).astype('uint8')
+            output = cv2.bitwise_and(img, img2, mask=mask2)
+            cv2.imwrite('drag_output.png', output, )
+        cv2.destroyAllWindows()
+
+
+    grabcut(origin)
+    col = [0, 0, 0]  # black
+    fuzzy = 5
+
+    from PIL import Image
+
+    img = Image.open('drag_output.png')
+    img = img.convert("RGBA")
+    datas = img.getdata()
+
+    newData = []
+    for item in datas:
+        if col[0] - fuzzy <= item[0] <= col[0] + fuzzy and col[1] - fuzzy <= item[1] <= col[1] + fuzzy and col[
+            2] - fuzzy <= item[2] <= col[2] + fuzzy:
+            newData.append((255, 255, 255, 0))
+        else:
+            newData.append(item)
+
+    img.putdata(newData)
+    img.save("transback.png", "PNG")  # 투명배경 저장
+
+    # 컨투어 후 최외각 점 4개로 ROI
+
+    image = cv2.imread("transback.png", cv2.IMREAD_UNCHANGED)
+
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+
+    gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
+
+    edge = cv2.Canny(gray, 50, 150)
+
+    ret, binary = cv2.threshold(edge, 127, 255, cv2.THRESH_BINARY_INV)
+    edge = binary
+    f = open("output1.txt", 'w')
+
+    edge = cv2.bitwise_not(edge)
+    contours, hierachy = cv2.findContours(edge.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    edges = image.copy()
+
+    leftmost = 1000000
+    rightmost = 0
+    topmost = 1000000
+    bottommost = 0
+    for i in range(len(contours)):
+        cnt = contours[i]
+        #
+        # nowleftmost = cnt[cnt[:, :, 0].argmin()]
+        # nowrightmost = cnt[cnt[:, :, 0].argmax()]
+        # nowtopmost = cnt[cnt[:, :, 1].argmin()]
+        # nowbottommost = cnt[cnt[:, :, 1].argmax()]
+
+        nowleftmost = tuple(cnt[cnt[:, :, 0].argmin()][0])
+        nowrightmost = tuple(cnt[cnt[:, :, 0].argmax()][0])
+        nowtopmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
+        nowbottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
+        # print(nowleftmost)
+        # print(nowtopmost)
+        # print(nowrightmost)
+        # print(nowbottommost)
+        # print(leftmost)
+        # print(rightmost)
+        # print(topmost)
+        # print(bottommost)
+
+        leftmost = min(leftmost, nowleftmost[0])
+        rightmost = max(rightmost, nowrightmost[0])
+        topmost = min(topmost, nowtopmost[1])
+        bottommost = max(bottommost, nowbottommost[1])
+        # print(leftmost)
+        # print(rightmost)
+        # print(topmost)
+        # print(bottommost)
+
+    # 좌우상하 최외각 점을 기준으로 roi 생성
+    img1 = image[topmost:bottommost + 2, leftmost:rightmost + 2]
+    cv2.imwrite('roi1.png', img1)
+    ######################################################################################################################
+    # 여기까지가 옷 사진의 전처리
+
+    #################################여기서 부터 도면 사진의 전처리
+    grabcut(copy)
+    col = [0, 0, 0]  # black
+    fuzzy = 5
+
+    from PIL import Image
+
+    img = Image.open('drag_output.png')
+    img = img.convert("RGBA")
+    datas = img.getdata()
+
+    newData = []
+    for item in datas:
+        if col[0] - fuzzy <= item[0] <= col[0] + fuzzy and col[1] - fuzzy <= item[1] <= col[1] + fuzzy and col[
+            2] - fuzzy <= item[2] <= col[2] + fuzzy:
+            newData.append((255, 255, 255, 0))
+        else:
+            newData.append(item)
+
+    img.putdata(newData)
+    img.save("transback2.png", "PNG")
+    #######################여기까지 도면이미지를 원하는 부분부분짤라서 뒷배경 투명처리함
+    #######################여기서 부터 투명된 도면이미지를 네개로 짤라서~~~어쩌고함
+    # 컨투어 후 최외각 점 4개로 ROI
+
+    image = cv2.imread("transback2.png", cv2.IMREAD_UNCHANGED)  # 여기가 도면 넣는 곳임
+
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+
+    gray = cv2.cvtColor(blurred, cv2.COLOR_BGR2GRAY)
+
+    edge = cv2.Canny(gray, 50, 150)
+
+    ret, binary = cv2.threshold(edge, 127, 255, cv2.THRESH_BINARY_INV)
+    edge = binary
+    f = open("output2.txt", 'w')
+
+    edge = cv2.bitwise_not(edge)
+    contours, hierachy = cv2.findContours(edge.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    edges = image.copy()
+
+    leftmost = 1000000
+    rightmost = 0
+    topmost = 1000000
+    bottommost = 0
+    for i in range(len(contours)):
+        cnt = contours[i]
+        #
+        # nowleftmost = cnt[cnt[:, :, 0].argmin()]
+        # nowrightmost = cnt[cnt[:, :, 0].argmax()]
+        # nowtopmost = cnt[cnt[:, :, 1].argmin()]
+        # nowbottommost = cnt[cnt[:, :, 1].argmax()]
+
+        nowleftmost = tuple(cnt[cnt[:, :, 0].argmin()][0])
+        nowrightmost = tuple(cnt[cnt[:, :, 0].argmax()][0])
+        nowtopmost = tuple(cnt[cnt[:, :, 1].argmin()][0])
+        nowbottommost = tuple(cnt[cnt[:, :, 1].argmax()][0])
+        # print(nowleftmost)
+        # print(nowtopmost)
+        # print(nowrightmost)
+        # print(nowbottommost)
+        # print(leftmost)
+        # print(rightmost)
+        # print(topmost)
+        # print(bottommost)
+
+        leftmost = min(leftmost, nowleftmost[0])
+        rightmost = max(rightmost, nowrightmost[0])
+        topmost = min(topmost, nowtopmost[1])
+        bottommost = max(bottommost, nowbottommost[1])
+        # print(leftmost)
+        # print(rightmost)
+        # print(topmost)
+        # print(bottommost)
+
+    # 좌우상하 최외각 점을 기준으로 roi 생성
+    img1 = image[topmost:bottommost + 2, leftmost:rightmost + 2]
+    cv2.imwrite('roi2.png', img1)
+    cv2.destroyAllWindows()
+    ########################여기까지 최외각 네모로 잘랐다
+    ########################이제 부터는 점 두개씩 찍고 비율 맞춰가는 코드 + inpainting
+
+    roi1 = cv2.imread('roi1.png')
+    roi2 = cv2.imread('roi2.png')
+    # roi1은 내옷사진이고 roi2는 도면사진
+
+    base_point_list = []
+    my_point_list = []
+
+
+    # 마우스 액션에 대한 이벤트
+    def my_MouseClick(event, x, y, flags, param):
+        global my_point_list
+
+        # 마우스 왼쪽버튼을 눌렀을 때
+        if event == cv2.EVENT_LBUTTONDOWN:
+            my_point_list.append((x, y))
+            print(my_point_list)
+            cv2.circle(roi1, (x, y), 3, (0, 0, 255), -1)
+        return
+
+
+    # 마우스 액션에 대한 이벤트
+    def base_MouseClick(event, x, y, flags, param):
+        global base_point_list
+        # 마우스 왼쪽버튼을 눌렀을 때
+        if event == cv2.EVENT_LBUTTONDOWN:
+            base_point_list.append((x, y))
+            print(base_point_list)
+            cv2.circle(roi2, (x, y), 3, (0, 0, 255), -1)
+        return
+
+
+    cv2.namedWindow('roi1')
+    cv2.setMouseCallback('roi1', my_MouseClick)
+
+    cv2.namedWindow('roi2')
+    cv2.setMouseCallback('roi2', base_MouseClick)
+
+    copy1 = roi1.copy()
+    copy2 = roi2.copy()
+
+    while (True):
+        cv2.imshow('roi1', roi1)
+        cv2.imshow('roi2', roi2)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("f"):  # 4개의 점 다 선택했으면 끝내두됨
+            break
+        elif key == ord("r"):  # r은 리셋
+            my_point_list.clear()
+            base_point_list.clear()
+            roi1 = copy1.copy()
+            roi2 = copy2.copy()
+
+    my_xmin = 1000000
+    my_xmax = 0
+    base_xmin = 1000000
+    base_xmax = 0
+
+    if my_point_list[0][0] > my_point_list[1][0]:
+        my_xmax = my_point_list[0][0]
+        my_xmin = my_point_list[1][0]
+    else:
+        my_xmax = my_point_list[1][0]
+        my_xmin = my_point_list[0][0]
+
+    if base_point_list[0][0] > base_point_list[1][0]:
+        base_xmax = base_point_list[0][0]
+        base_xmin = base_point_list[1][0]
+    else:
+        base_xmax = base_point_list[1][0]
+        base_xmin = base_point_list[0][0]
+
+    #########################여기 점 찍을 때, 모델 -> 도면 / 모델 -> 도면 순으로 찍어야함
+    x = base_point_list[0][0] - my_point_list[0][0]
+    y = base_point_list[0][1] - my_point_list[0][1]
+
+    my = my_xmax - my_xmin
+    base = base_xmax - base_xmin
+    mymy = my
+    basebase = base
+    roi1 = copy1.copy()
+    roi2 = copy2.copy()
+    print(my)
+    print(base)
+    if my < base:
+        rat = base / my
+        roi1 = cv2.resize(roi1, dsize=(0, 0), fx=rat, fy=1, interpolation=cv2.INTER_AREA)
+        mymy = int(mymy * rat)
+        # 보간법 / 사이즈 줄일 떄는 INTER_AREA 크게할 떄는 INTER_CUBIC 또는 INTER_LINEAR
+    elif my > base:
+        rat = my / base
+        roi2 = cv2.resize(roi2, dsize=(0, 0), fx=rat, fy=1, interpolation=cv2.INTER_AREA)
+        basebase = int(basebase * rat)
+
+        ####################여기까지 좌우를 대충 맞춤
+        ####################여기서 부터 위아래를 대충 맞춤
+
+    copy1 = roi1.copy()
+    copy2 = roi2.copy()
+    my_point_list.clear()
+    base_point_list.clear()
+
+    cv2.namedWindow('roi1')
+    cv2.setMouseCallback('roi1', my_MouseClick)
+
+    cv2.namedWindow('roi2')
+    cv2.setMouseCallback('roi2', base_MouseClick)
+
+    while (True):
+        cv2.imshow('roi1', roi1)
+        cv2.imshow('roi2', roi2)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord("f"):  # 4개의 점 다 선택했으면 끝내두됨
+            break
+        elif key == ord("r"):  # r은 리셋
+            my_point_list.clear()
+            base_point_list.clear()
+            roi1 = copy1.copy()
+            roi2 = copy2.copy()
+
+    my_ymin = 1000000
+    my_ymax = 0
+    base_ymin = 1000000
+    base_ymax = 0
+
+    if my_point_list[0][1] > my_point_list[1][1]:
+        my_ymax = my_point_list[0][1]
+        my_ymin = my_point_list[1][1]
+    else:
+        my_ymax = my_point_list[1][1]
+        my_ymin = my_point_list[0][1]
+
+    if base_point_list[0][1] > base_point_list[1][1]:
+        base_ymax = base_point_list[0][1]
+        base_ymin = base_point_list[1][1]
+    else:
+        base_ymax = base_point_list[1][1]
+        base_ymin = base_point_list[0][1]
+
+    my = my_ymax - my_ymin
+    base = base_ymax - base_ymin
+
+    roi1 = copy1.copy()
+    roi2 = copy2.copy()
+    print(my)
+    print(base)
+    if my < base:
+        rat = base / my
+        roi1 = cv2.resize(roi1, dsize=(0, 0), fx=1, fy=rat, interpolation=cv2.INTER_AREA)
+
+    elif my > base:
+        rat = my / base
+        roi2 = cv2.resize(roi2, dsize=(0, 0), fx=1, fy=rat, interpolation=cv2.INTER_AREA)
+
+    cv2.imwrite('roi1.png', roi1)
+    cv2.imwrite('roi2.png', roi2)
+    ####################여기까지 좌우 위아래 맞춤
+    ###################여기부터 팔양옆? 비율을 맞춤
+    # http://farang007blog.blogspot.com/2019/01/opencv-in-python.html 참고하기
+    ''''
+
+    addimage = cv2.add(roi1,roi2)
+    cv2.imshow(addimage)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    '''
+    '''
+    a =0.0
+    c=4
+    while(c>0):
+        w = roi2.shape[1]
+        h = roi2.shape[0]
+
+        roi1 = cv2.resize(roi1,(w,h))
+
+
+        b = 1.0-a
+        dst = cv2.addWeighted(roi1, a, roi2, b,0)
+        cv2.imshow('dst', dst)
+        cv2.waitKey(0)
+
+        c=c-1
+        a = a+0.1
+        '''
+    from PIL import Image as im
+
+    img = im.open('roi2.png')  # 이게 도면
+
+    img2 = im.open('roi1.png')
+    img3 = img.copy()
+
+    img3.paste(img2, (x, y))
+    print(basebase - mymy)
+    img3.save('helo.png')
+
+    point_list = []
+    count = 0
+    nowCount = 0
+    base_point_list = []
+    baseCount = 0
+    base_nowCount = 0
+
+
+    def first_MouseClick(event, x, y, flags, param):
+        global base_point_list, count
+        # 마우스 왼쪽버튼을 눌렀을 때
+        if event == cv2.EVENT_LBUTTONDOWN:
+            point_list.append((x, y))
+            count = count + 1
+            print(point_list)
+            cv2.circle(imgIn, (x, y), 3, (0, 0, 255), -1)
+        return
+
+
+    def base_MouseClick(event, x, y, flags, param):
+        global base_point_list, baseCount
+        # 마우스 왼쪽버튼을 눌렀을 때
+
+        if event == cv2.EVENT_LBUTTONDOWN:
+            base_point_list.append((x, y))
+            print(base_point_list)
+            baseCount = baseCount + 1
+            cv2.circle(imgOut, (x, y), 3, (0, 0, 255), -1)
+        return
+
+
+    # Warps and alpha blends triangular regions from img1 and img2 to img
+    def warpTriangle(img1, img2, tri1, tri2):
+        # Find bounding rectangle for each triangle
+        r1 = cv2.boundingRect(tri1)
+        r2 = cv2.boundingRect(tri2)
+
+        # Offset points by left top corner of the respective rectangles
+        tri1Cropped = []
+        tri2Cropped = []
+
+        for i in range(0, 3):
+            tri1Cropped.append(((tri1[0][i][0] - r1[0]), (tri1[0][i][1] - r1[1])))
+            tri2Cropped.append(((tri2[0][i][0] - r2[0]), (tri2[0][i][1] - r2[1])))
+
+        # Crop input image
+        img1Cropped = img1[r1[1]:r1[1] + r1[3], r1[0]:r1[0] + r1[2]]
+
+        # Given a pair of triangles, find the affine transform.
+        warpMat = cv2.getAffineTransform(np.float32(tri1Cropped), np.float32(tri2Cropped))
+
+        # Apply the Affine Transform just found to the src image
+        img2Cropped = cv2.warpAffine(img1Cropped, warpMat, (r2[2], r2[3]), None, flags=cv2.INTER_LINEAR,
+                                     borderMode=cv2.BORDER_REFLECT_101)
+
+        # Get mask by filling triangle
+        mask = np.zeros((r2[3], r2[2], 3), dtype=np.float32)
+        cv2.fillConvexPoly(mask, np.int32(tri2Cropped), (1.0, 1.0, 1.0), 16, 0);
+
+        img2Cropped = img2Cropped * mask
+
+        # Copy triangular region of the rectangular patch to the output image
+        img2[r2[1]:r2[1] + r2[3], r2[0]:r2[0] + r2[2]] = img2[r2[1]:r2[1] + r2[3], r2[0]:r2[0] + r2[2]] * (
+                (1.0, 1.0, 1.0) - mask)
+
+        img2[r2[1]:r2[1] + r2[3], r2[0]:r2[0] + r2[2]] = img2[r2[1]:r2[1] + r2[3], r2[0]:r2[0] + r2[2]] + img2Cropped
+
+
+    ###################################
+
+    # Read input image
+    imgIn = cv2.imread("roi1.png")
+
+    # Output image is set to white
+    imgOut = cv2.imread("helo.png")
+
+    cv2.namedWindow("image")
+    cv2.setMouseCallback("image", first_MouseClick)
+
+    cv2.namedWindow('image2')
+    cv2.setMouseCallback('image2', base_MouseClick)
+    # Input triangle
+
+    imgIn2 = imgIn.copy()
+    imgOut2 = imgOut.copy()
+    clone = imgIn.copy()
+    clone2 = imgOut.copy()
+
+    while True:
+        # 이미지를 출력하고 key 입력을 기다립니다.
+        cv2.imshow("image", imgIn)
+        cv2.imshow('image2', imgOut)
+        key = cv2.waitKey(1) & 0xFF
+
+        # 만약 r이 입력되면, crop 할 영열을 리셋합니다.
+        if key == ord("r"):
+            imgIn = clone.copy()
+            imgOut = clone2.copy()
+            point_list.clear()
+            base_point_list.clear()
+            count = 0
+            baseCount = 0
+            # point = 0
+            # point2 = 4
+            nowCount = 0
+            base_nowCount = 0
+        elif key == ord("c"):
+
+            triIn = np.float32([[point_list[nowCount], point_list[nowCount + 1], point_list[nowCount + 2]]])
+
+            # triIn = np.float32([[[360, 200], [60, 250], [450, 400]]])
+            triOut = np.float32([[base_point_list[base_nowCount], base_point_list[base_nowCount + 1],
+                                  base_point_list[base_nowCount + 2]]])
+            print(triIn)
+            print(triOut)
+            # Warp all pixels inside input triangle to output triangle
+            warpTriangle(imgIn2, imgOut2, triIn, triOut)
+
+            # Draw triangle using this color
+            color = (255, 150, 0)
+
+            # Draw triangles in input and output images.
+            # cv2.polylines(imgIn, triIn.astype(int), True, color, 0, 16)
+            # cv2.polylines(imgOut, triOut.astype(int), True, color, 0, 16)
+
+            cv2.imshow("Input", imgIn2)
+            cv2.imshow("Output", imgOut2)
+            nowCount = nowCount + 3
+            base_nowCount = base_nowCount + 3
+
+            cv2.waitKey(0)
+        elif key == ord("q"):
+            cv2.imwrite(outputfile, imgOut2)
+            break
